@@ -1,8 +1,10 @@
 import 'dotenv/config';
 import express from 'express';
-import { UserModel } from './db.js';
+import { ContentModel, UserModel } from './db.js';
 import bcrypt from 'bcrypt';
 import mongoose from 'mongoose';
+import jwt from 'jsonwebtoken';
+import { userMiddleware } from './middleware.js';
 await mongoose.connect(process.env.MONGO_URL);
 const app = express();
 app.use(express.json());
@@ -10,20 +12,70 @@ app.post('/signup', async (req, res) => {
     const username = req.body.username;
     const password = req.body.password;
     const hashedPassword = await bcrypt.hash(password, 6);
-    await UserModel.create({
-        username: username,
-        password: hashedPassword
+    try {
+        await UserModel.create({
+            username: username,
+            password: hashedPassword
+        });
+        res.json({
+            message: "You are signed up successfully"
+        });
+    }
+    catch (e) {
+        res.status(411).json({
+            message: "User already exists"
+        });
+    }
+});
+app.post('/signin', async (req, res) => {
+    const username = req.body.username;
+    const password = req.body.password;
+    const existingUser = await UserModel.findOne({
+        username: username
+    });
+    if (!existingUser) {
+        return res.status(403).json({
+            message: "User does not exist"
+        });
+    }
+    const passwordMatch = await bcrypt.compare(password, existingUser.password);
+    if (passwordMatch) {
+        const token = jwt.sign({
+            id: existingUser._id.toString()
+        }, process.env.JWT_SECRET);
+        res.json({
+            token: token
+        });
+    }
+    else {
+        res.status(403).json({
+            message: 'Incorrect credentials'
+        });
+    }
+});
+app.post('/content', userMiddleware, async (req, res) => {
+    const link = req.body.link;
+    const type = req.body.type;
+    const title = req.body.title;
+    ContentModel.create({
+        link, type, title,
+        //@ts-ignore
+        userId: req.userId,
+        tags: []
+    });
+    return res.json({
+        message: "Content added"
+    });
+});
+app.get('/content', userMiddleware, async (req, res) => {
+    //@ts-ignore
+    const userId = req.userId;
+    const content = await ContentModel.find({
+        userId: userId
     });
     res.json({
-        message: "You are signed up successfully"
+        content
     });
-});
-app.post('/signin', (req, res) => {
-    const username = req.body.username;
-});
-app.post('/content', (req, res) => {
-});
-app.get('/content', (req, res) => {
 });
 app.delete('/content', (req, res) => {
 });
