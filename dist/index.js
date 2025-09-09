@@ -1,10 +1,11 @@
 import 'dotenv/config';
 import express from 'express';
-import { ContentModel, UserModel } from './db.js';
+import { ContentModel, LinkModel, UserModel } from './db.js';
 import bcrypt from 'bcrypt';
 import mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';
 import { userMiddleware } from './middleware.js';
+import { random } from './utils.js';
 await mongoose.connect(process.env.MONGO_URL);
 const app = express();
 app.use(express.json());
@@ -72,14 +73,40 @@ app.get('/content', userMiddleware, async (req, res) => {
     const userId = req.userId;
     const content = await ContentModel.find({
         userId: userId
-    });
+    }).populate("userId", "username");
     res.json({
         content
     });
 });
-app.delete('/content', (req, res) => {
+app.delete('/content', userMiddleware, async (req, res) => {
+    const contentId = req.body.contentId;
+    await ContentModel.deleteMany({
+        contentId,
+        //@ts-ignore
+        userId: req.userId
+    });
+    res.json({
+        message: "delete"
+    });
 });
-app.post('/brain/share', (req, res) => {
+app.post('/brain/share', userMiddleware, async (req, res) => {
+    const share = req.body.share;
+    if (share) {
+        await LinkModel.create({
+            //@ts-ignore
+            userId: req.userId,
+            hash: random(10)
+        });
+    }
+    else {
+        await LinkModel.deleteOne({
+            //@ts-ignore
+            userId: req.userId
+        });
+    }
+    res.json({
+        message: "Updated sharable Link"
+    });
 });
 app.get('/brain/:sharelink', (req, res) => {
 });

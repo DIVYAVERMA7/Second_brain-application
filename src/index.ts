@@ -1,10 +1,11 @@
 import 'dotenv/config'
 import express from 'express'
-import { ContentModel, UserModel } from './db.js'
+import { ContentModel, LinkModel, UserModel } from './db.js'
 import bcrypt from 'bcrypt'
 import mongoose from 'mongoose'
 import jwt from 'jsonwebtoken'
 import { userMiddleware } from './middleware.js'
+import { random } from './utils.js'
 
 await mongoose.connect(process.env.MONGO_URL as string) 
 const app = express()
@@ -88,15 +89,64 @@ app.get('/content',userMiddleware,async(req,res)=>{
     })
 })
 
-app.delete('/content',(req,res)=>{
-    
+app.delete('/content',userMiddleware,async(req,res)=>{
+    const contentId = req.body.contentId
+    await ContentModel.deleteMany({
+        contentId,
+        //@ts-ignore
+        userId:req.userId
+    })
+    res.json({
+        message:"delete"
+    })
 })
 
-app.post('/brain/share',(req,res)=>{
-    
+app.post('/brain/share',userMiddleware,async(req,res)=>{
+    const share = req.body.share
+    if(share){
+     await LinkModel.create({
+        //@ts-ignore
+            userId:req.userId,
+            hash:random(10)
+        })
+    }else{
+     await LinkModel.deleteOne({
+         //@ts-ignore
+            userId:req.userId
+        })
+    }
+    res.json({
+        message:"Updated sharable Link"
+    })
 })
 
-app.get('/brain/:sharelink',(req,res)=>{
+app.get('/brain/:sharelink',async(req,res)=>{
+    const hash = req.params.sharelink
+    const link = await LinkModel.findOne({
+        hash
+    })
+    if(!link){
+        res.status(411).json({
+            message:"Sorry incorrect input"
+        })
+        return
+    }
+    const content = await ContentModel.find({
+        userId:link.userId
+    })
+    const user = await UserModel.findOne({
+        userId:link.userId
+    })
+    if(!user){
+        res.status(411).json({
+            message:"User not found, error should ideallhy not happen"
+        })
+        return
+    }
+    res.json({
+        username:user.username,
+        content:content
+    })
     
 })
 
